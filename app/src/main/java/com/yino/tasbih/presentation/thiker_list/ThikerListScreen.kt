@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.Add
@@ -40,14 +41,14 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Cancel
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SwitchRight
-import androidx.compose.material.icons.rounded.ViewList
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
@@ -61,6 +62,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -80,8 +83,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -94,13 +98,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yino.tasbih.domain.model.Thiker
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import org.burnoutcrew.reorderable.ReorderableItem
 import org.burnoutcrew.reorderable.detectReorder
 import org.burnoutcrew.reorderable.rememberReorderableLazyGridState
 import org.burnoutcrew.reorderable.rememberReorderableLazyListState
 import org.burnoutcrew.reorderable.reorderable
-import kotlin.math.abs
 
 @ExperimentalMaterial3Api
 @Composable
@@ -110,103 +112,59 @@ fun ThikerListScreen(
 ) {
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var items by remember { mutableStateOf(uiState.items) }
+    val thikerUiState by viewModel.thikerUiState.collectAsStateWithLifecycle()
 
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState()
-    var currentSortType by remember { mutableStateOf(ThikerListSortType.Custom) }
     var isBottomSheetVisible by remember { mutableStateOf(false) }
+
+//    var isSearchBarVisible by remember { mutableStateOf(false) }
+    var isSearchBarExpanded by remember { mutableStateOf(false) }
+    val searchBarTextFieldFocusRequester = remember { FocusRequester() }
 
     var isViewList by remember { mutableStateOf(true) }
     var isCreateUpdateThikerDailogOpen by remember { mutableStateOf(false) }
 
     val reorderableState = rememberReorderableLazyListState(
-        onMove = { from, to ->
-            items = items
-                .toMutableList()
-                .apply {
-                    get(to.index).orderIndex = from.index
-
-                    add(
-                        index = to.index,
-                        element = removeAt(from.index)
-                            .apply {
-                                orderIndex = to.index
-                            }
-                    )
-                }
-        },
+        onMove = viewModel::onReorderThikerList
     )
 
     val reorderableLazyGridState = rememberReorderableLazyGridState(
-        onMove = { from, to ->
-            items = items
-                .toMutableList()
-                .apply {
-                    add(
-                        index = to.index,
-                        element = removeAt(from.index)
-                            .apply {
-                                orderIndex = to.index
-                            }
-                    )
-
-                    val startIndex = if (from.index <= to.index) from.index else to.index
-                    val endIndex = if (to.index >= from.index) to.index else from.index
-
-                    for (index in startIndex..endIndex) {
-                        set(
-                            index = index,
-                            element = get(index).copy(orderIndex = index)
-                        )
-                    }
-                }
-        },
+        onMove = viewModel::onReorderThikerList
     )
-
-    LaunchedEffect(uiState.items) {
-//        Log.d("ThikerList", items.toString())
-        items = uiState.items
-    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { },
                 actions = {
-                    IconButton(
-                        onClick = { isViewList = !isViewList }
-                    ) {
+                    IconButton(onClick = { isSearchBarExpanded = true }) {
                         Icon(
-                            imageVector = if (isViewList) {
-                                Icons.AutoMirrored.Rounded.ViewList
-                            } else {
-                                Icons.Rounded.GridView
-                            },
+                            imageVector = Icons.Rounded.Search,
                             contentDescription = null
                         )
                     }
-                    IconButton(
-                        onClick = { isBottomSheetVisible = true }
-                    ) {
+
+                    IconButton(onClick = { isViewList = !isViewList }) {
                         Icon(
-                            imageVector = when(currentSortType) {
-                                ThikerListSortType.Custom -> Icons.AutoMirrored.Rounded.Sort
-                                ThikerListSortType.CreatedDate_ASC  -> Icons.Rounded.SwitchRight
-                                ThikerListSortType.CreatedDate_DESC -> Icons.Rounded.SwitchRight
-                                ThikerListSortType.ModifiedDate_ASC -> Icons.Rounded.SwitchRight
-                                ThikerListSortType.ModifiedDate_DESC -> Icons.Rounded.SwitchRight
-                            },
+                            imageVector = if (isViewList) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                            contentDescription = null
+                        )
+                    }
+
+                    val (imageVector, degrees) =  when(uiState.savedSortType) {
+                        ThikerListSortType.Custom -> Pair(Icons.AutoMirrored.Rounded.Sort, 0f)
+                        ThikerListSortType.CreatedDate_ASC  -> Pair(Icons.Rounded.SwitchRight, 270f)
+                        ThikerListSortType.CreatedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
+                        ThikerListSortType.ModifiedDate_ASC -> Pair(Icons.Rounded.SwitchRight, 270f)
+                        ThikerListSortType.ModifiedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
+                    }
+
+                    IconButton(onClick = { isBottomSheetVisible = true }) {
+                        Icon(
+                            imageVector = imageVector,
                             contentDescription = null,
-                            modifier = Modifier.let {
-                                when (currentSortType) {
-                                    ThikerListSortType.Custom -> it
-                                    ThikerListSortType.CreatedDate_ASC -> it.rotate(270f)
-                                    ThikerListSortType.CreatedDate_DESC -> it.rotate(90f)
-                                    ThikerListSortType.ModifiedDate_ASC -> it.rotate(270f)
-                                    ThikerListSortType.ModifiedDate_DESC -> it.rotate(90f)
-                                }
-                            }
+                            modifier = Modifier.rotate(degrees)
                         )
                     }
                 }
@@ -226,7 +184,7 @@ fun ThikerListScreen(
         modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
 
-        if (items.isEmpty()) {
+        if (uiState.thikerList.isEmpty()) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
@@ -236,7 +194,9 @@ fun ThikerListScreen(
                     text = "لا يوجد أذكار"
                 )
             }
-        } else if (isViewList) {
+        }
+
+        if (isViewList) {
             LazyColumn(
                 state = reorderableState.listState,
                 verticalArrangement = Arrangement.spacedBy(5.dp),
@@ -247,14 +207,12 @@ fun ThikerListScreen(
 //                        .detectReorderAfterLongPress(reorderableState)
                     .fillMaxSize()
             ) {
-                items(items = items, key = { it.id }) { thiker ->
+                items(items = uiState.thikerList, key = { it.id }) { thiker ->
                     ReorderableItem(reorderableState, key = thiker.id) { isDragging ->
                         ThikerItem(
                             thiker = thiker,
                             onUpdate = {
-                                viewModel.initUpdateCreateUpdateThikerUiState(
-                                    thiker = items.find { it.id == thiker.id } !!
-                                )
+                                viewModel.loadCreateUpdateThikerUiState(thikerId = thiker.id)
                                 isCreateUpdateThikerDailogOpen = true
                             },
                             onDelete = { viewModel.onDeleteThiker(thiker) },
@@ -262,7 +220,7 @@ fun ThikerListScreen(
                             onClick = { },
                             modifier = Modifier
                                 .let {
-                                    if (currentSortType == ThikerListSortType.Custom) {
+                                    if (uiState.savedSortType == ThikerListSortType.Custom) {
                                         it.detectReorder(reorderableState)
                                     } else it
                                 }
@@ -270,12 +228,13 @@ fun ThikerListScreen(
 
                         LaunchedEffect(isDragging) {
                             if (!isDragging) {
-                                viewModel.onUpdateOrderIndex(thikerList = items)
+                                viewModel.onUpdateOrderIndex()
                             }
                         }
                     }
                 }
             }
+
         } else {
 
             LazyVerticalGrid(
@@ -290,7 +249,7 @@ fun ThikerListScreen(
                     .fillMaxSize()
 
             ) {
-                items(items = items, key = { it.id }) { thiker ->
+                items(items = uiState.thikerList, key = { it.id }) { thiker ->
                     ReorderableItem(
                         reorderableState = reorderableLazyGridState,
                         key = thiker.id,
@@ -298,9 +257,7 @@ fun ThikerListScreen(
                         ThikerItem(
                             thiker = thiker,
                             onUpdate = {
-                                viewModel.initUpdateCreateUpdateThikerUiState(
-                                    thiker = items.find { it.id == thiker.id } !!
-                                )
+                                viewModel.loadCreateUpdateThikerUiState(thikerId = thiker.id)
                                 isCreateUpdateThikerDailogOpen = true
                             },
                             onDelete = { viewModel.onDeleteThiker(thiker) },
@@ -308,7 +265,7 @@ fun ThikerListScreen(
                             onClick = { },
                             modifier = Modifier
                                 .let {
-                                    if (currentSortType == ThikerListSortType.Custom) {
+                                    if (uiState.savedSortType == ThikerListSortType.Custom) {
                                         it.detectReorder(reorderableLazyGridState)
                                     } else it
                                 }
@@ -316,7 +273,7 @@ fun ThikerListScreen(
 
                         LaunchedEffect(isDragging) {
                             if (!isDragging) {
-                                viewModel.onUpdateOrderIndex(thikerList = items)
+                                viewModel.onUpdateOrderIndex()
                             }
                         }
                     }
@@ -324,34 +281,102 @@ fun ThikerListScreen(
             }
         }
 
+        if (isSearchBarExpanded) {
+            SearchBar(
+                colors = SearchBarDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                inputField = {
+                    SearchBarDefaults.InputField(
+                        query = uiState.query,
+                        onQueryChange = viewModel::onQueryChange,
+                        onSearch = { },
+                        expanded = isSearchBarExpanded,
+                        onExpandedChange = { isSearchBarExpanded = it },
+                        placeholder = {
+                            Text(text = "Search for Thiker")
+                        },
+                        leadingIcon = {
+                            IconButton(
+                                onClick = {
+                                    viewModel.onQueryChange("")
+                                    isSearchBarExpanded = false
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                    contentDescription = null
+                                )
+                            }
+                        },
+                        trailingIcon = {
+                            if (uiState.query.isNotEmpty())
+                                IconButton(
+                                    onClick = {
+                                        viewModel.onQueryChange("")
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = null
+                                    )
+                                }
+                        },
+                        modifier = Modifier
+                            .focusRequester(searchBarTextFieldFocusRequester)
+                    )
+                },
+                expanded = isSearchBarExpanded,
+                onExpandedChange = { isSearchBarExpanded = it }
+            ) {
+                LazyColumn {
+                    items(items = uiState.filteredThikerList, key = { it.id }) { thiker ->
+                        Box(
+                            modifier = Modifier
+                                .padding(15.dp)
+                        ) {
+                            Text(
+                                text = thiker.title,
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
-        val createUpdateThikerUiState by viewModel.createUpdateThikerUiState.collectAsStateWithLifecycle()
+        LaunchedEffect(isSearchBarExpanded) {
+            if (isSearchBarExpanded) {
+                searchBarTextFieldFocusRequester.requestFocus()
+            }
+        }
+
 
         if (isCreateUpdateThikerDailogOpen) {
             CreateUpdateThikerDailog(
-                uiState = createUpdateThikerUiState,
-                onUpdateCreateUpdateThikerUiState = viewModel::initUpdateCreateUpdateThikerUiState,
+                uiState = thikerUiState,
+                onUiStateChange = viewModel::onUpdateThikerUiState,
+                onDismissRequest = {
+                    isCreateUpdateThikerDailogOpen = false
+                    viewModel.clearCreateUpdateThikerUiState()
+                },
                 onSave = {
-                    if (createUpdateThikerUiState.thiker.id == 0L) {
+                    isCreateUpdateThikerDailogOpen = false
+                    if (thikerUiState.thiker.id == 0L) {
                         viewModel.onCreateThiker()
                     } else {
                         viewModel.onUpdateThiker()
                     }
-                    isCreateUpdateThikerDailogOpen = false
                 },
-                onDismissRequest = { isCreateUpdateThikerDailogOpen = false }
             )
         }
 
         ThikerListSortBottomSheet(
             sheetState = sheetState,
             isBottomSheetVisible = isBottomSheetVisible,
-            currentSortType = currentSortType,
+            currentSortType = uiState.savedSortType,
             onDismissRequest = { isBottomSheetVisible = false },
-            onSort = {
-                currentSortType = it
-                viewModel.setSorting(it)
-            }
+            onSort = viewModel::setSortType
         )
     }
 }
@@ -533,8 +558,8 @@ fun ThikerItem(
 
 @Composable
 fun CreateUpdateThikerDailog(
-    uiState: CreateUpdateThikerUiState,
-    onUpdateCreateUpdateThikerUiState: (Thiker) -> Unit = { },
+    uiState: ThikerUiState,
+    onUiStateChange: (Thiker) -> Unit = { },
     onSave: () -> Unit = { },
     onDismissRequest: () -> Unit = { },
     modifier: Modifier = Modifier
@@ -561,7 +586,7 @@ fun CreateUpdateThikerDailog(
                     OutlinedTextField(
                         value = uiState.thiker.title,
                         onValueChange = {
-                            onUpdateCreateUpdateThikerUiState(
+                            onUiStateChange(
                                 uiState.thiker.copy(title = it)
                             )
                         },
@@ -572,7 +597,7 @@ fun CreateUpdateThikerDailog(
                     OutlinedTextField(
                         value = uiState.thiker.maxCount.toString(),
                         onValueChange = {
-                            onUpdateCreateUpdateThikerUiState(
+                            onUiStateChange(
                                 uiState.thiker.copy(maxCount = it.toLongOrNull() ?: 0L)
                             )
                         },
@@ -587,7 +612,7 @@ fun CreateUpdateThikerDailog(
                             val currentCountValue = it.toLongOrNull() ?: 0L
 
                             if (currentCountValue <= uiState.thiker.maxCount) {
-                                onUpdateCreateUpdateThikerUiState(
+                                onUiStateChange(
                                     uiState.thiker.copy(currentCount = currentCountValue)
                                 )
                             }
@@ -642,8 +667,6 @@ fun ThikerListSortBottomSheet(
     onSort: (ThikerListSortType) -> Unit = { },
     modifier: Modifier = Modifier
 ) {
-    var isCreatedDateASC by remember { mutableStateOf(true) }
-    var isModifiedDateASC by remember { mutableStateOf(true) }
 
     if (isBottomSheetVisible) {
         ModalBottomSheet(
@@ -681,73 +704,57 @@ fun ThikerListSortBottomSheet(
                     }
                 )
 
-                if (isCreatedDateASC) {
-                    ThikerListSortBotton(
-                        label = ThikerListSortType.CreatedDate_ASC.displayName,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDownward,
-                                contentDescription = null
-                            )
-                        },
-                        isCurrentThikerListSortType = currentSortType == ThikerListSortType.CreatedDate_ASC,
-                        onClick = {
-                            isCreatedDateASC = false
-                            onSort(ThikerListSortType.CreatedDate_DESC)
-                            onDismissRequest()
-                        }
-                    )
-                } else {
-                    ThikerListSortBotton(
-                        label = ThikerListSortType.CreatedDate_DESC.displayName,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowUpward,
-                                contentDescription = null
-                            )
-                        },
-                        isCurrentThikerListSortType = currentSortType == ThikerListSortType.CreatedDate_DESC,
-                        onClick = {
-                            isCreatedDateASC = true
-                            onSort(ThikerListSortType.CreatedDate_ASC)
-                            onDismissRequest()
-                        }
-                    )
-                }
+                ThikerListSortBotton(
+                    label = ThikerListSortType.CreatedDate_ASC.displayName,
+                    icon = {
+                        Icon(
+                            imageVector = if (currentSortType == ThikerListSortType.CreatedDate_ASC) {
+                                Icons.Rounded.ArrowDownward
+                            } else {
+                                Icons.Rounded.ArrowUpward
+                            },
+                            contentDescription = null
+                        )
+                    },
+                    isCurrentThikerListSortType = currentSortType == ThikerListSortType.CreatedDate_ASC ||
+                            currentSortType == ThikerListSortType.CreatedDate_DESC,
+                    onClick = {
+                        onSort(
+                            if (currentSortType == ThikerListSortType.CreatedDate_ASC) {
+                                ThikerListSortType.CreatedDate_DESC
+                            } else {
+                                ThikerListSortType.CreatedDate_ASC
+                            }
+                        )
+                        onDismissRequest()
+                    }
+                )
 
-                if (isModifiedDateASC) {
-                    ThikerListSortBotton(
-                        label = ThikerListSortType.ModifiedDate_ASC.displayName,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowDownward,
-                                contentDescription = null
-                            )
-                        },
-                        isCurrentThikerListSortType = currentSortType == ThikerListSortType.ModifiedDate_ASC,
-                        onClick = {
-                            isModifiedDateASC = false
-                            onSort(ThikerListSortType.ModifiedDate_DESC)
-                            onDismissRequest()
-                        }
-                    )
-                } else {
-                    ThikerListSortBotton(
-                        label = ThikerListSortType.ModifiedDate_DESC.displayName,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Rounded.ArrowUpward,
-                                contentDescription = null
-                            )
-                        },
-                        isCurrentThikerListSortType = currentSortType == ThikerListSortType.ModifiedDate_DESC,
-                        onClick = {
-                            isModifiedDateASC = true
-                            onSort(ThikerListSortType.ModifiedDate_ASC)
-                            onDismissRequest()
-                        }
-                    )
-                }
+                ThikerListSortBotton(
+                    label = ThikerListSortType.ModifiedDate_ASC.displayName,
+                    icon = {
+                        Icon(
+                            imageVector = if (currentSortType == ThikerListSortType.ModifiedDate_ASC) {
+                                Icons.Rounded.ArrowDownward
+                            } else {
+                                Icons.Rounded.ArrowUpward
+                            },
+                            contentDescription = null
+                        )
+                    },
+                    isCurrentThikerListSortType = currentSortType == ThikerListSortType.ModifiedDate_ASC ||
+                            currentSortType == ThikerListSortType.ModifiedDate_DESC,
+                    onClick = {
+                        onSort(
+                            if (currentSortType == ThikerListSortType.ModifiedDate_ASC) {
+                                ThikerListSortType.ModifiedDate_DESC
+                            } else {
+                                ThikerListSortType.ModifiedDate_ASC
+                            }
+                        )
+                        onDismissRequest()
+                    }
+                )
 
             }
         }

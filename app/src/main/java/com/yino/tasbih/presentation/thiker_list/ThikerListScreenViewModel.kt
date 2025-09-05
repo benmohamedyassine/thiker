@@ -16,22 +16,26 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDateTime
+import org.burnoutcrew.reorderable.ItemPosition
 import javax.inject.Inject
 
 const val THIKER_LIST_SORT_SAVED_STATE_KEY = "THIKER_LIST_SORT_SAVED_STATE_KEY"
 
-data class CreateUpdateThikerUiState(
+data class ThikerUiState(
     val thiker: Thiker = Thiker(),
     val isLoading: Boolean = false,
 )
 
 data class ThikerListUiState(
-    val items: List<Thiker> = emptyList(),
-    val isLoading: Boolean = false,
+    val thikerList: List<Thiker> = emptyList(),
+    val filteredThikerList: List<Thiker> = emptyList(),
+    var query: String = "",
+    var savedSortType: ThikerListSortType = ThikerListSortType.Custom,
+    var isLoading: Boolean = false,
 )
 
 @HiltViewModel
@@ -43,57 +47,99 @@ class ThikerListScreenViewModel @Inject constructor(
     private val deleteThikerUseCase: DeleteThikerUseCase,
     val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-
+    
     private val _savedSortType = savedStateHandle
         .getStateFlow(THIKER_LIST_SORT_SAVED_STATE_KEY, ThikerListSortType.Custom)
+    private val _uiState = MutableStateFlow(ThikerListUiState())
+    private val _thikerUiState = MutableStateFlow(ThikerUiState())
 
-    private val _createUpdateThikerUiState = MutableStateFlow(CreateUpdateThikerUiState())
-    val createUpdateThikerUiState = _createUpdateThikerUiState.asStateFlow()
+    val uiState = _uiState.asStateFlow()
+    val thikerUiState = _thikerUiState.asStateFlow()
 
-    val uiState: StateFlow<ThikerListUiState> = combine(
-        getThikerListUseCase(), _savedSortType
-    ) { items, type ->
-        ThikerListUiState(
-            items = sortItems(items = items, sortingType = type),
-            isLoading = false
-        )
-    }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ThikerListUiState(isLoading = true)
-        )
-
-    fun setSorting(requestType: ThikerListSortType) {
-        savedStateHandle.set(key = THIKER_LIST_SORT_SAVED_STATE_KEY, value = requestType)
+    init {
+        combine(getThikerListUseCase(), _savedSortType) { thikerList, type ->
+            _uiState.update {
+                it.copy(
+                    thikerList = sortThikerList(thikerList = thikerList, sortingType = type),
+                    savedSortType = type,
+                    isLoading = false
+                )
+            }
+        }
+            .launchIn(viewModelScope)
     }
 
-    private fun sortItems(items: List<Thiker>, sortingType: ThikerListSortType): List<Thiker> {
+    private fun sortThikerList(thikerList: List<Thiker>, sortingType: ThikerListSortType): List<Thiker> {
         return when (sortingType) {
-            ThikerListSortType.Custom -> items.sortedBy { it.orderIndex }
-            ThikerListSortType.CreatedDate_ASC -> items.sortedBy { it.createdAt }
-            ThikerListSortType.CreatedDate_DESC -> items.sortedByDescending { it.createdAt }
-            ThikerListSortType.ModifiedDate_ASC -> items.sortedBy { it.updatedAt }
-            ThikerListSortType.ModifiedDate_DESC -> items.sortedByDescending { it.updatedAt }
+            ThikerListSortType.Custom -> thikerList.sortedBy { it.orderIndex }
+            ThikerListSortType.CreatedDate_ASC -> thikerList.sortedBy { it.createdAt }
+            ThikerListSortType.CreatedDate_DESC -> thikerList.sortedByDescending { it.createdAt }
+            ThikerListSortType.ModifiedDate_ASC -> thikerList.sortedBy { it.updatedAt }
+            ThikerListSortType.ModifiedDate_DESC -> thikerList.sortedByDescending { it.updatedAt }
+        }
+    }
+
+    fun setSortType(sortType: ThikerListSortType) {
+        savedStateHandle.set(key = THIKER_LIST_SORT_SAVED_STATE_KEY, value = sortType)
+    }
+
+    fun onQueryChange(query: String) {
+        _uiState.update {
+            it.copy(
+                query = query,
+                filteredThikerList = if (query.isNotBlank()) {
+                    it.thikerList
+                        .filter { thiker ->
+                            thiker.title.contains(query.trim())
+                        }
+                } else emptyList()
+            )
+        }
+    }
+
+    fun onReorderThikerList(from: ItemPosition, to: ItemPosition) {
+        _uiState.update { uiState ->
+            uiState.copy(
+                thikerList = uiState.thikerList
+                    .toMutableList()
+                    .apply {
+                        add(index = to.index, element = removeAt(from.index))
+
+                        val startIndex = minOf(from.index, to.index)
+                        val endIndex = maxOf(from.index, to.index)
+
+                        for (index in startIndex..endIndex) {
+                            set(
+                                index = index,
+                                element = get(index).copy(orderIndex = index)
+                            )
+                        }
+                    }
+            )
         }
     }
 
     fun resetCreateUpdateThikerUiState() {
-        _createUpdateThikerUiState.update {
-            CreateUpdateThikerUiState()
+        _thikerUiState.update {
+            ThikerUiState()
         }
     }
 
-    fun onUpdateOrderIndex(thikerList: List<Thiker>) {
+    fun onUpdateOrderIndex() {
         viewModelScope.launch {
-            updateThikerOrderIndexUseCase(thikerList = thikerList)
+            updateThikerOrderIndexUseCase(thikerList = uiState.value.thikerList)
         }
     }
 
-    fun initUpdateCreateUpdateThikerUiState(thiker: Thiker) {
-        _createUpdateThikerUiState.update {
+    fun loadCreateUpdateThikerUiState(thikerId: Long) {
+        val thiker = uiState.value.thikerList.find { thiker -> thiker.id == thikerId } !!
+        _thikerUiState.update { it.copy(thiker = thiker) }
+    }
+
+    fun onUpdateThikerUiState(newThiker: Thiker) {
+        _thikerUiState.update {
             it.copy(
-                thiker = thiker
+                thiker = newThiker
             )
         }
     }
@@ -101,28 +147,30 @@ class ThikerListScreenViewModel @Inject constructor(
     fun onCreateThiker() {
         viewModelScope.launch {
             createThikerUseCase(
-                thiker = createUpdateThikerUiState.value.thiker.copy(
+                thiker = thikerUiState.value.thiker.copy(
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis(),
-                    orderIndex = uiState.value.items.count()
+                    orderIndex = uiState.value.thikerList.count()
                 )
             )
-        }
-        _createUpdateThikerUiState.update {
-            CreateUpdateThikerUiState()
+            clearCreateUpdateThikerUiState()
         }
     }
 
     fun onUpdateThiker() {
         viewModelScope.launch {
             updateThikerUseCase(
-                thiker = createUpdateThikerUiState.value.thiker.copy(
+                thiker = thikerUiState.value.thiker.copy(
                     updatedAt = System.currentTimeMillis(),
                 )
             )
+            clearCreateUpdateThikerUiState()
         }
-        _createUpdateThikerUiState.update {
-            CreateUpdateThikerUiState()
+    }
+
+    fun clearCreateUpdateThikerUiState() {
+        _thikerUiState.update {
+            ThikerUiState()
         }
     }
 
