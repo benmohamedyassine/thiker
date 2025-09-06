@@ -92,6 +92,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -138,42 +139,40 @@ fun ThikerListScreen(
 
     Scaffold(
         topBar = {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                TopAppBar(
-                    title = { },
-                    actions = {
-                        IconButton(onClick = { isSearchBarExpanded = true }) {
-                            Icon(
-                                imageVector = Icons.Rounded.Search,
-                                contentDescription = null
-                            )
-                        }
-
-                        IconButton(onClick = { isViewList = !isViewList }) {
-                            Icon(
-                                imageVector = if (isViewList) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
-                                contentDescription = null
-                            )
-                        }
-
-                        val (imageVector, degrees) =  when(uiState.savedSortType) {
-                            ThikerListSortType.Custom -> Pair(Icons.AutoMirrored.Rounded.Sort, 0f)
-                            ThikerListSortType.CreatedDate_ASC  -> Pair(Icons.Rounded.SwitchRight, 270f)
-                            ThikerListSortType.CreatedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
-                            ThikerListSortType.ModifiedDate_ASC -> Pair(Icons.Rounded.SwitchRight, 270f)
-                            ThikerListSortType.ModifiedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
-                        }
-
-                        IconButton(onClick = { isBottomSheetVisible = true }) {
-                            Icon(
-                                imageVector = imageVector,
-                                contentDescription = null,
-                                modifier = Modifier.rotate(degrees)
-                            )
-                        }
+            TopAppBar(
+                title = { },
+                actions = {
+                    IconButton(onClick = { isSearchBarExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Search,
+                            contentDescription = null
+                        )
                     }
-                )
-            }
+
+                    IconButton(onClick = { isViewList = !isViewList }) {
+                        Icon(
+                            imageVector = if (isViewList) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                            contentDescription = null
+                        )
+                    }
+
+                    val (imageVector, degrees) =  when(uiState.savedSortType) {
+                        ThikerListSortType.Custom -> Pair(Icons.AutoMirrored.Rounded.Sort, 0f)
+                        ThikerListSortType.CreatedDate_ASC  -> Pair(Icons.Rounded.SwitchRight, 270f)
+                        ThikerListSortType.CreatedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
+                        ThikerListSortType.ModifiedDate_ASC -> Pair(Icons.Rounded.SwitchRight, 270f)
+                        ThikerListSortType.ModifiedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
+                    }
+
+                    IconButton(onClick = { isBottomSheetVisible = true }) {
+                        Icon(
+                            imageVector = imageVector,
+                            contentDescription = null,
+                            modifier = Modifier.rotate(degrees)
+                        )
+                    }
+                }
+            )
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -527,12 +526,15 @@ fun ThikerItem(
                             ) {
                                 Column(
                                     modifier = Modifier
+                                        .weight(1f)
                                         .padding(vertical = 15.dp, horizontal = 20.dp)
                                 ) {
                                     Text(
                                         text = "${String.format("%02d", thiker.orderIndex)} - ${thiker.title}",
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 20.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
                                         text = "عدد التسبيح: ${String.format("%02d", thiker.currentCount)}",

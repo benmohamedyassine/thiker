@@ -58,6 +58,7 @@ fun NavHostSetup(modifier: Modifier = Modifier) {
                     uiState = uiState,
                     onIncrementCount = viewModel::onIncrementCount,
                     onResetCount = viewModel::onResetCount,
+                    onNavBack = { navController.popBackStack() }
                 )
             }
         }
