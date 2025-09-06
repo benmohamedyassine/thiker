@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -53,6 +54,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -108,6 +110,7 @@ import org.burnoutcrew.reorderable.reorderable
 @Composable
 fun ThikerListScreen(
     viewModel: ThikerListScreenViewModel = hiltViewModel<ThikerListScreenViewModel>(),
+    onNavToTasbih: (Long) -> Unit = { },
     modifier: Modifier = Modifier
 ) {
 
@@ -135,40 +138,42 @@ fun ThikerListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { },
-                actions = {
-                    IconButton(onClick = { isSearchBarExpanded = true }) {
-                        Icon(
-                            imageVector = Icons.Rounded.Search,
-                            contentDescription = null
-                        )
-                    }
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                TopAppBar(
+                    title = { },
+                    actions = {
+                        IconButton(onClick = { isSearchBarExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Search,
+                                contentDescription = null
+                            )
+                        }
 
-                    IconButton(onClick = { isViewList = !isViewList }) {
-                        Icon(
-                            imageVector = if (isViewList) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
-                            contentDescription = null
-                        )
-                    }
+                        IconButton(onClick = { isViewList = !isViewList }) {
+                            Icon(
+                                imageVector = if (isViewList) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                                contentDescription = null
+                            )
+                        }
 
-                    val (imageVector, degrees) =  when(uiState.savedSortType) {
-                        ThikerListSortType.Custom -> Pair(Icons.AutoMirrored.Rounded.Sort, 0f)
-                        ThikerListSortType.CreatedDate_ASC  -> Pair(Icons.Rounded.SwitchRight, 270f)
-                        ThikerListSortType.CreatedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
-                        ThikerListSortType.ModifiedDate_ASC -> Pair(Icons.Rounded.SwitchRight, 270f)
-                        ThikerListSortType.ModifiedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
-                    }
+                        val (imageVector, degrees) =  when(uiState.savedSortType) {
+                            ThikerListSortType.Custom -> Pair(Icons.AutoMirrored.Rounded.Sort, 0f)
+                            ThikerListSortType.CreatedDate_ASC  -> Pair(Icons.Rounded.SwitchRight, 270f)
+                            ThikerListSortType.CreatedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
+                            ThikerListSortType.ModifiedDate_ASC -> Pair(Icons.Rounded.SwitchRight, 270f)
+                            ThikerListSortType.ModifiedDate_DESC -> Pair(Icons.Rounded.SwitchRight, 90f)
+                        }
 
-                    IconButton(onClick = { isBottomSheetVisible = true }) {
-                        Icon(
-                            imageVector = imageVector,
-                            contentDescription = null,
-                            modifier = Modifier.rotate(degrees)
-                        )
+                        IconButton(onClick = { isBottomSheetVisible = true }) {
+                            Icon(
+                                imageVector = imageVector,
+                                contentDescription = null,
+                                modifier = Modifier.rotate(degrees)
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -180,7 +185,7 @@ fun ThikerListScreen(
                 )
             }
         },
-//        floatingActionButtonPosition = FabPosition.Start,
+        floatingActionButtonPosition = FabPosition.Start,
         modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
 
@@ -217,7 +222,7 @@ fun ThikerListScreen(
                             },
                             onDelete = { viewModel.onDeleteThiker(thiker) },
                             onSelect = { },
-                            onClick = { },
+                            onClick = { onNavToTasbih(thiker.id) },
                             modifier = Modifier
                                 .let {
                                     if (uiState.savedSortType == ThikerListSortType.Custom) {
@@ -262,7 +267,7 @@ fun ThikerListScreen(
                             },
                             onDelete = { viewModel.onDeleteThiker(thiker) },
                             onSelect = { },
-                            onClick = { },
+                            onClick = { onNavToTasbih(thiker.id) },
                             modifier = Modifier
                                 .let {
                                     if (uiState.savedSortType == ThikerListSortType.Custom) {
@@ -294,7 +299,7 @@ fun ThikerListScreen(
                         expanded = isSearchBarExpanded,
                         onExpandedChange = { isSearchBarExpanded = it },
                         placeholder = {
-                            Text(text = "Search for Thiker")
+                            Text(text = "ابحث عن ذكر")
                         },
                         leadingIcon = {
                             IconButton(
@@ -333,11 +338,18 @@ fun ThikerListScreen(
                     items(items = uiState.filteredThikerList, key = { it.id }) { thiker ->
                         Box(
                             modifier = Modifier
-                                .padding(15.dp)
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.onQueryChange("")
+                                    onNavToTasbih(thiker.id)
+                                }
                         ) {
                             Text(
                                 text = thiker.title,
-                                fontSize = 16.sp
+                                fontSize = 16.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(15.dp)
                             )
                         }
                     }
@@ -428,7 +440,7 @@ fun ThikerItem(
             state = swipeToDismissBoxState,
             backgroundContent = {
                 when (swipeToDismissBoxState.dismissDirection) {
-                    SwipeToDismissBoxValue.StartToEnd -> {
+                    SwipeToDismissBoxValue.EndToStart -> {
                         Icon(
                             Icons.Rounded.Edit,
                             contentDescription = null,
@@ -441,7 +453,7 @@ fun ThikerItem(
                         )
                     }
 
-                    SwipeToDismissBoxValue.EndToStart -> {
+                    SwipeToDismissBoxValue.StartToEnd -> {
                         Icon(
                             imageVector = Icons.Rounded.Delete,
                             contentDescription = null,
